@@ -4,117 +4,193 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
-	"os"
 	"time"
 )
 
 /////// main.go //////////////////////////////////////////////////////////////
 // Only the code for the rocket game, using abstractions from engine.go for //
 // readability.                                                             //
+// TODO: color for the actual game - not just the                           //
+// title screen, powerups, make the game fair for defferent terminal sizes  //
 //////////////////////////////////////////////////////////////////////////////
 
 type gameState struct {
 	rocketPos     uint
 	playerScore   uint
 	currentRocket int
+	obstacleMap   [][]bool // The first list is the y the second is the x, if the bool is true then there is an obstacle
 	terminal      *terminalManager
 }
 
 const (
-	rocketWidth        = 13
-	rocketLeftPointing = iota - 2
-	rocketNormal
-	rocketRightPointing
+	rocketWidth         = 13
+	rocketLeftPointing  = -1
+	rocketNormal        = 0
+	rocketRightPointing = 1
 )
 
-func (gameData *gameState) drawRocket() {
-	maxRocketPos := uint(gameData.terminal.noOfColumns - rocketWidth)
-	if gameData.rocketPos >= maxRocketPos {
-		gameData.rocketPos = maxRocketPos
-	} else if gameData.rocketPos < 1 {
-		gameData.rocketPos = 1
+func (game *gameState) doCollisionDetection() {
+	var rocketBodyStartAndEnd []uint
+	switch game.currentRocket {
+	case rocketNormal:
+		rocketBodyStartAndEnd = []uint{
+			4, 10,
+			5, 9,
+			2, 12,
+			2, 12,
+			3, 11,
+			4, 10,
+			5, 9,
+			5, 9,
+			6, 8,
+			7, 7,
+		}
+	case rocketLeftPointing:
+		rocketBodyStartAndEnd = []uint{
+			7, 13,
+			6, 12,
+			2, 11,
+			2, 12,
+			2, 12,
+			2, 10,
+			2, 8,
+			1, 6,
+			0, 5,
+			0, 2,
+		}
+	case rocketRightPointing:
+		rocketBodyStartAndEnd = []uint{
+			1, 7,
+			2, 8,
+			3, 12,
+			2, 12,
+			2, 12,
+			4, 12,
+			6, 12,
+			8, 13,
+			9, 14,
+			12, 14,
+		}
 	}
-	switch gameData.currentRocket {
+	obstacleMapY := int(game.playerScore)
+	for i := 0; i < 20; i += 2 {
+		obstacleMapY %= len(game.obstacleMap)
+		if game.obstacleMap[obstacleMapY][game.rocketPos+rocketBodyStartAndEnd[i]] || game.obstacleMap[obstacleMapY][game.rocketPos+rocketBodyStartAndEnd[i+1]] {
+			exitGame("Well done commander, you drove the rocket into an XXL rock!")
+		}
+		obstacleMapY++
+	}
+}
+
+func (game *gameState) drawRocket() {
+	maxRocketPos := uint(game.terminal.noOfColumns - rocketWidth)
+	if game.rocketPos > maxRocketPos {
+		game.rocketPos = maxRocketPos
+	} else if game.rocketPos < 1 {
+		game.rocketPos = 1
+	}
+	game.doCollisionDetection()
+	switch game.currentRocket {
 	case rocketNormal:
 		drawMultilineText(
 			[]string{
-				`    \=====/    `,
-				`     | S |     `,
-				`  ___| C |___  `,
-				`  \  | O |  /  `,
-				`   \ | R | /   `,
-				`    \| E |/    `,
-				fmt.Sprintf(`     |%3d|     `, gameData.playerScore),
-				`     \   /     `,
-				`      \ /      `,
-				`       *       `,
+				`!!!!\=====/!!!!`,
+				`!!   | S |   !!`,
+				`!!___| C |___!!`,
+				`!!\  | O |  /!!`,
+				`!!!\ | R | /!!!`,
+				`!!!!\| E |/!!!!`,
+				fmt.Sprintf(`!!!!!|%3d|!!!!!`, game.playerScore),
+				`!!!!!\   /!!!!!`,
+				`!!!!!!\ /!!!!!!`,
+				`!!!!!!!*!!!!!!!`,
 			},
-			gameData.rocketPos, 1) // Draw the rocket
+			game.rocketPos, 1)
 	case rocketLeftPointing:
 		drawMultilineText(
 			[]string{
-				`       |=====/ `,
-				`       / S /   `,
-				`  |-__/ C /    `,
-				`  |  / O /-__  `,
-				`  | / R /  _/  `,
-				`  |/ E / _/    `,
-				fmt.Sprintf(`  /%3d/_/      `, gameData.playerScore),
-				` /   /         `,
-				`/  _/          `,
-				`|_/            `,
+				`!!!!!!!|=====/ `,
+				`!!     / S / !!`,
+				`!!|-__/ C /  !!`,
+				`!!|  / O /-__ !`,
+				`!!| / R /  _/ !`,
+				`!!|/ E / _/ !!!`,
+				fmt.Sprintf(`! /%3d/_/ !!!!!`, game.playerScore),
+				` /   / !!!!!!!!`,
+				`/  _/ !!!!!!!!!`,
+				`|_/ !!!!!!!!!!!`,
 			},
-			gameData.rocketPos, 1) // Draw the rocket
+			game.rocketPos, 1)
 	case rocketRightPointing:
 		drawMultilineText(
 			[]string{
-				` \=====|       `,
-				`   \ S \       `,
-				`    \ C \__-|  `,
-				`  __-\ O \  |  `,
-				`  \_  \ R \ |  `,
-				`    \_ \ E \|  `,
-				fmt.Sprintf(`      \_\%3d\  `, gameData.playerScore),
-				`         \   \ `,
-				`          \_  \`,
-				`            \_|`,
+				` \=====|!!!!!!!`,
+				`!! \ S \     !!`,
+				`!!  \ C \__-|!!`,
+				`! __-\ O \  |!!`,
+				`! \_  \ R \ |!!`,
+				`!!! \_ \ E \|!!`,
+				fmt.Sprintf(`!!!!! \_\%3d\ !`, game.playerScore),
+				`!!!!!!!! \   \ `,
+				`!!!!!!!!! \_  \`,
+				`!!!!!!!!!!! \_|`,
 			},
-			gameData.rocketPos, 1) // Draw the rocket
+			game.rocketPos, 1)
 	}
+}
+
+func (game *gameState) drawRock(text []string, x uint) {
+	y := uint(game.terminal.noOfLines - 3)
+	for _, line := range text {
+		pos := x
+		fmt.Printf("\033[%d;%dH", y, x)
+		for _, letter := range line {
+			if letter != '!' {
+				fmt.Print(string(letter))
+				game.obstacleMap[game.convertYToObstacleMapIndex(y-1)][pos] = true
+			} else {
+				fmt.Print("\033[C")
+			}
+			pos++
+		}
+		y++
+	}
+}
+
+func (game *gameState) convertYToObstacleMapIndex(y uint) uint {
+	return (y + game.playerScore) % uint(len(game.obstacleMap))
 }
 
 func (game *gameState) rocketFly() {
 	game.playerScore++
-	if game.playerScore >= 999 {
-		fmt.Println("\033[2J\033[HCongratulations, you appear to have a player score longer then the rocket's counter can comprehend. Good job!")
-		os.Exit(0)
-	}
-	if game.playerScore % 2 == 0 {
-		switch rand.Intn(2) {
-			case 0:
-				drawMultilineText([]string{
-					" _____",
-					`/     \`,
-					"|    _/",
-					` \__/`,
-				}, uint(rand.Intn(int(game.terminal.noOfColumns))), uint(game.terminal.noOfLines)-3)
-			case 1:
-				drawMultilineText([]string{
-					"  __    ___",
-					` /  \__/   \`,
-					"|       ___/",
-					` \_____/`,
-				}, uint(rand.Intn(int(game.terminal.noOfColumns))), uint(game.terminal.noOfLines)-3)
-			case 2:
-				drawMultilineText([]string{
-					` ___`,
-					`/   \`,
-					`\___/`,
-				}, uint(rand.Intn(int(game.terminal.noOfColumns))), uint(game.terminal.noOfLines)-2)
-			}
-	}
 	fmt.Print("\033[9999;9999H\n")
-	game.drawRocket()
+	game.obstacleMap[game.convertYToObstacleMapIndex(uint(game.terminal.noOfLines-1))] = make([]bool, game.terminal.noOfColumns)
+	if game.playerScore >= 999 {
+		exitGame("Congratulations, you appear to have a player score longer then the rocket's counter can comprehend, this means that you've won the game.")
+	}
+	xPos := uint(rand.Intn(int(game.terminal.noOfColumns) - 12))
+	switch rand.Intn(2) {
+	case 0:
+		game.drawRock([]string{
+			"!_____",
+			`/     \`,
+			"|    _/",
+			`!\__/`,
+		}, xPos)
+	case 1:
+		game.drawRock([]string{
+			"!!__!!!!___",
+			`!/  \__/   \`,
+			"|       ___/",
+			`!\_____/`,
+		}, xPos)
+	case 2:
+		game.drawRock([]string{
+			`!___`,
+			`/   \`,
+			`\___/`,
+		}, xPos)
+	}
 }
 
 func main() {
@@ -148,8 +224,13 @@ func main() {
 	// Create the actual game //
 	fmt.Print("\033[2J") // Clear the screen
 	game.terminal.resizeFunction = func() {
+		game.obstacleMap = make([][]bool, game.terminal.noOfLines)
+		for i := range game.obstacleMap {
+			game.obstacleMap[i] = make([]bool, game.terminal.noOfColumns)
+		}
 		game.drawRocket()
 	}
+	game.terminal.resizeFunction()
 
 	// Loop to handle keypresses //
 	go func() {
@@ -178,7 +259,7 @@ func main() {
 					game.currentRocket = rocketRightPointing
 				}
 			case 'q':
-				os.Exit(0)
+				exitGame("You quit the game by pressing Q, bye bye.")
 			default:
 				continue
 			}
@@ -186,20 +267,16 @@ func main() {
 		}
 	}()
 
-	// Loop for moving the rocket every 150ms //
-	go func() {
-		for {
-			if game.currentRocket != rocketNormal {
-				game.rocketPos = uint(int(game.rocketPos) + game.currentRocket) // Update the rocket position dependent on which way the rocket is pointing
-				game.drawRocket()
-			}
-			time.Sleep(150 * time.Millisecond)
-		}
-	}()
-
 	// Main game loop //
 	for {
+		for i := 0; i < 10; i++ {
+			if game.currentRocket != rocketNormal {
+				game.rocketPos += uint(game.currentRocket) // Update the rocket position dependent on which way the rocket is pointing
+				game.drawRocket()
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
 		game.rocketFly()
-		time.Sleep(1 * time.Second)
+		game.drawRocket()
 	}
 }

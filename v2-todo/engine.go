@@ -18,32 +18,26 @@ import (
 // (TODO: only unix based systems are supported)             //
 ///////////////////////////////////////////////////////////////
 
-func removeWhitespace(text string) (string, int) {
-	var startWhitespace int
-	for text[startWhitespace] == ' ' {
-		startWhitespace++
-	}
-	endWhitespace := len(text) - 1
-	for text[endWhitespace] == ' ' {
-		endWhitespace--
-	}
-	return text[startWhitespace:endWhitespace], startWhitespace
-}
-
-
-// Takes a list of single line strings and draws them as one multiline string at position x and y
+// - draws a list of single line strings as one multiline string at position x and y
+// - if any of the strings have an ! mark, then the original text will be left
 func drawMultilineText(text []string, x uint, y uint) {
-	for _, string := range text {
-		text, startWhitespace := removeWhitespace(string)
-		fmt.Printf("\033[%d;%dH"+text, y, x+uint(startWhitespace))
+	for _, line := range text {
+		fmt.Printf("\033[%d;%dH", y, x)
+		for _, letter := range line {
+			if letter == '!' {
+				fmt.Print("\033[C")
+			} else {
+				fmt.Print(string(letter))
+			}
+		}
 		y++
 	}
 }
 
 // This struct contains things for managing the terminal such as:
-// - variables for how large the terminal is in size
-// - a reader to handle user keypresses
-// - a resize function which is ran whenever the terminal resizes
+//   - variables for how large the terminal is in size
+//   - a reader to handle user keypresses
+//   - a resize function which is ran whenever the terminal resizes
 type terminalManager struct {
 	// These first 4 items MUST be first
 	noOfLines        uint16
@@ -87,4 +81,10 @@ func setupTerminal(terminalResizeFunction func()) *terminalManager {
 		}
 	}()
 	return &terminal
+}
+
+// Clears the screen and prints a message in the top left before exiting the program
+func exitGame(message string) {
+	fmt.Printf("\033[2J\033[H%s\n", message)
+	os.Exit(0)
 }
